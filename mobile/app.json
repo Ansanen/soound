@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "soound",
+    "slug": "soound",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "soound",
+    "backgroundColor": "#08080e",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "xyz.soound.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#08080e"
+      },
+      "package": "xyz.soound.app"
+    },
+    "plugins": []
+  }
+}
