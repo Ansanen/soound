@@ -35,9 +35,13 @@ export const api = {
   search: (query: string) =>
     request(`/api/search?q=${encodeURIComponent(query)}`),
 
-  // Stream URL (not fetched, just constructed)
+  // Stream URL (proxy through server)
   getStreamUrl: (youtubeId: string) =>
     `${API_URL}/api/stream/${youtubeId}`,
+
+  // Get direct audio URL from YouTube (resolved server-side)
+  getAudioUrl: (youtubeId: string) =>
+    request<{ url: string }>(`/api/audio-url/${youtubeId}`),
 
   // Rewards
   getRewards: (userId: string) =>

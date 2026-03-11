@@ -48,12 +48,22 @@ export function useSyncPlayer({ queue, isHost, roomCode, onPlaybackStatus }: Use
       soundRef.current = null;
     }
 
-    const streamUrl = api.getStreamUrl(track.youtubeId);
-    console.log('[player] loading track:', track.title, streamUrl);
+    console.log('[player] loading track:', track.title);
+
+    // Try to get direct audio URL first, fallback to stream proxy
+    let audioUri: string;
+    try {
+      const { url } = await api.getAudioUrl(track.youtubeId);
+      audioUri = url;
+      console.log('[player] got direct audio URL');
+    } catch {
+      audioUri = api.getStreamUrl(track.youtubeId);
+      console.log('[player] using stream proxy fallback');
+    }
 
     try {
       const { sound } = await Audio.Sound.createAsync(
-        { uri: streamUrl },
+        { uri: audioUri },
         { shouldPlay: false },
         (status) => {
           if (status.isLoaded) {
