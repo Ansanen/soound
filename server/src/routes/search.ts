@@ -44,6 +44,34 @@ async function getAudioUrl(youtubeId: string): Promise<string> {
 }
 
 export async function searchRoutes(app: FastifyInstance) {
+  // Debug endpoint to check yt-dlp
+  app.get('/api/debug/ytdlp', async (req, reply) => {
+    try {
+      const { stdout: version } = await execFileAsync('yt-dlp', ['--version'], { timeout: 5000 });
+      let testResult = '';
+      try {
+        const { stdout, stderr } = await execFileAsync('yt-dlp', [
+          '--no-check-certificates',
+          '-f', 'bestaudio[ext=m4a]/bestaudio',
+          '--get-url',
+          '--no-warnings',
+          '--verbose',
+          'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        ], { timeout: 30000 });
+        testResult = `stdout: ${stdout.substring(0, 200)}\nstderr: ${stderr.substring(0, 500)}`;
+      } catch (e: any) {
+        testResult = `error: ${e.message?.substring(0, 200)}\nstderr: ${e.stderr?.substring(0, 500)}`;
+      }
+      return {
+        version: version.trim(),
+        deno: await execFileAsync('deno', ['--version'], { timeout: 5000 }).then(r => r.stdout.trim()).catch(() => 'not found'),
+        testResult,
+      };
+    } catch (e: any) {
+      return reply.status(500).send({ error: e.message });
+    }
+  });
+
   // YouTube search (still using play-dl which works for search)
   app.get('/api/search', async (req, reply) => {
     const { q } = req.query as { q: string };
