@@ -105,54 +105,13 @@ export async function searchRoutes(app: FastifyInstance) {
     }
   });
 
-  // Audio stream proxy — proxies audio through our server to avoid CORS issues
+  // Audio stream — redirects to direct YouTube audio URL
+  // iOS AVPlayer and web Audio both handle redirects natively
   app.get('/api/stream/:youtubeId', async (req, reply) => {
     const { youtubeId } = req.params as { youtubeId: string };
     try {
       const audioUrl = await getAudioUrl(youtubeId);
-
-      // Use fetch which auto-follows redirects
-      const fetchHeaders: Record<string, string> = {
-        'User-Agent': 'Mozilla/5.0',
-      };
-      if (req.headers.range) {
-        fetchHeaders['Range'] = req.headers.range as string;
-      }
-
-      const proxyRes = await fetch(audioUrl, { headers: fetchHeaders });
-
-      const resHeaders: Record<string, string> = {
-        'Content-Type': proxyRes.headers.get('content-type') || 'audio/mp4',
-        'Accept-Ranges': 'bytes',
-        'Access-Control-Allow-Origin': '*',
-      };
-      const contentLength = proxyRes.headers.get('content-length');
-      if (contentLength) resHeaders['Content-Length'] = contentLength;
-      const contentRange = proxyRes.headers.get('content-range');
-      if (contentRange) resHeaders['Content-Range'] = contentRange;
-
-      reply.raw.writeHead(proxyRes.status, resHeaders);
-
-      if (proxyRes.body) {
-        // @ts-ignore - Node.js ReadableStream to Node stream pipe
-        const reader = proxyRes.body.getReader();
-        const pump = async () => {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            reply.raw.write(value);
-          }
-          reply.raw.end();
-        };
-        pump().catch((err) => {
-          console.error('Stream pump error:', err);
-          reply.raw.end();
-        });
-      } else {
-        reply.raw.end();
-      }
-
-      return reply;
+      return reply.redirect(302, audioUrl);
     } catch (err) {
       console.error('Stream error:', err);
       return reply.status(500).send({ error: 'Stream failed' });

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { colors, spacing, radius, fonts } from '../theme';
 import { api } from '../services/api';
@@ -29,14 +29,18 @@ export default function SearchMusic({ onAddTrack }: SearchMusicProps) {
   const [loading, setLoading] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
+  const [error, setError] = useState('');
+
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
     setLoading(true);
+    setError('');
     try {
       const data = await api.search(query) as SearchResult[];
       setResults(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Search failed:', e);
+      setError(e.message || 'Search failed');
     } finally {
       setLoading(false);
     }
@@ -60,15 +64,17 @@ export default function SearchMusic({ onAddTrack }: SearchMusicProps) {
           returnKeyType="search"
         />
         {loading && <ActivityIndicator color={colors.accent} style={styles.loader} />}
+        <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
+          <Text style={styles.searchBtnText}>Search</Text>
+        </TouchableOpacity>
       </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <FlatList
-        data={results}
-        keyExtractor={item => item.youtubeId}
-        renderItem={({ item }) => {
+      <View style={styles.list}>
+        {results.length > 0 ? results.map((item) => {
           const added = addedIds.has(item.youtubeId);
           return (
-            <View style={styles.item}>
+            <View key={item.youtubeId} style={styles.item}>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
                 <Text style={styles.itemArtist} numberOfLines={1}>{item.artist}</Text>
@@ -87,14 +93,12 @@ export default function SearchMusic({ onAddTrack }: SearchMusicProps) {
               </View>
             </View>
           );
-        }}
-        ListEmptyComponent={
+        }) : (
           query.trim() && !loading ? (
             <Text style={styles.empty}>Search for songs to add to the queue</Text>
           ) : null
-        }
-        style={styles.list}
-      />
+        )}
+      </View>
     </View>
   );
 }
@@ -176,6 +180,23 @@ const styles = StyleSheet.create({
   },
   addBtnTextDone: {
     color: colors.green,
+  },
+  searchBtn: {
+    marginLeft: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accent,
+  },
+  searchBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    ...fonts.semibold,
+  },
+  errorText: {
+    color: '#ff6b6b',
+    fontSize: 12,
+    marginBottom: 8,
   },
   empty: {
     textAlign: 'center',

@@ -50,16 +50,9 @@ export function useSyncPlayer({ queue, isHost, roomCode, onPlaybackStatus }: Use
 
     console.log('[player] loading track:', track.title);
 
-    // Try to get direct audio URL first, fallback to stream proxy
-    let audioUri: string;
-    try {
-      const { url } = await api.getAudioUrl(track.youtubeId);
-      audioUri = url;
-      console.log('[player] got direct audio URL');
-    } catch {
-      audioUri = api.getStreamUrl(track.youtubeId);
-      console.log('[player] using stream proxy fallback');
-    }
+    // Always use stream proxy — direct YouTube URLs are blocked on mobile
+    const audioUri = api.getStreamUrl(track.youtubeId);
+    console.log('[player] stream URL:', audioUri);
 
     try {
       const { sound } = await Audio.Sound.createAsync(
