@@ -14,12 +14,11 @@ COPY package.json package-lock.json* ./
 COPY shared/ ./shared/
 COPY server/ ./server/
 
-# Install dependencies
-RUN npm install --workspace=shared --workspace=server
+# Install all workspace dependencies
+RUN npm install
 
-# Build shared + server
-RUN npm run build --workspace=shared 2>/dev/null || true
-RUN cd server && npx tsc || true
+# Install tsx globally for running TypeScript
+RUN npm install -g tsx
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data
@@ -27,8 +26,9 @@ RUN mkdir -p /app/data
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
+ENV DB_PATH=/app/data/soound.db
 
 EXPOSE 3000
 
-# Start with tsx for ESM compatibility (tsc output can have .js extension issues)
-CMD ["npx", "--workspace=server", "tsx", "server/src/index.ts"]
+# Start server with tsx from the server directory
+CMD ["tsx", "/app/server/src/index.ts"]
