@@ -1,25 +1,16 @@
-import React, { useState, useEffect, createContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, Platform, useWindowDimensions, StyleSheet } from 'react-native';
-import { colors } from './src/theme';
+import { colors, fonts } from './src/theme';
+import { RootStackParamList, UserContext } from './src/contexts/UserContext';
 import HomeScreen from './src/screens/HomeScreen';
 import JoinRoomScreen from './src/screens/JoinRoomScreen';
 import RoomScreen from './src/screens/RoomScreen';
 import RewardsScreen from './src/screens/RewardsScreen';
 import { api } from './src/services/api';
-
-export type RootStackParamList = {
-  Main: undefined;
-  JoinRoom: undefined;
-  Room: { roomCode: string; roomName: string; isHost: boolean };
-};
-
-export const UserContext = createContext<{ userId: string; username: string }>({
-  userId: '', username: '',
-});
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
@@ -37,6 +28,33 @@ const darkTheme = {
   },
 };
 
+function TabBarIcon({ focused, label }: { focused: boolean; label: string }) {
+  return (
+    <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
+      <Text style={[tabStyles.icon, { color: focused ? colors.accent : colors.textMuted }]}>
+        {label}
+      </Text>
+      {focused && <View style={tabStyles.activeDot} />}
+    </View>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  iconWrap: {
+    alignItems: 'center', justifyContent: 'center',
+    width: 44, height: 32, borderRadius: 12,
+  },
+  iconWrapActive: {
+    backgroundColor: colors.accentMuted,
+  },
+  icon: { fontSize: 18, ...fonts.bold },
+  activeDot: {
+    position: 'absolute', bottom: -6,
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: colors.accent,
+  },
+});
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -46,27 +64,32 @@ function MainTabs() {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: Platform.OS === 'web' ? 60 : 80,
-          paddingBottom: Platform.OS === 'web' ? 8 : 20,
+          height: Platform.OS === 'web' ? 56 : 84,
+          paddingBottom: Platform.OS === 'web' ? 8 : 24,
           paddingTop: 8,
+          elevation: 0,
         },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' as const },
+        tabBarLabelStyle: {
+          fontSize: 10, ...fonts.semibold, marginTop: 4,
+        },
       }}
     >
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>🏠</Text>,
+          tabBarIcon: ({ focused }) => <TabBarIcon focused={focused} label="~" />,
+          tabBarLabel: 'Listen',
         }}
       />
       <Tab.Screen
         name="Rewards"
         component={RewardsScreen}
         options={{
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>⭐</Text>,
+          tabBarIcon: ({ focused }) => <TabBarIcon focused={focused} label="*" />,
+          tabBarLabel: 'Rewards',
         }}
       />
     </Tab.Navigator>
@@ -78,7 +101,7 @@ function WebContainer({ children }: { children: React.ReactNode }) {
   if (Platform.OS !== 'web') return <>{children}</>;
   return (
     <View style={webStyles.outer}>
-      <View style={[webStyles.inner, width > 500 && { maxWidth: 430, borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }]}>
+      <View style={[webStyles.inner, width > 500 && webStyles.innerWide]}>
         {children}
       </View>
     </View>
@@ -88,6 +111,11 @@ function WebContainer({ children }: { children: React.ReactNode }) {
 const webStyles = StyleSheet.create({
   outer: { flex: 1, backgroundColor: '#000', alignItems: 'center' },
   inner: { flex: 1, width: '100%', backgroundColor: colors.bg },
+  innerWide: {
+    maxWidth: 430,
+    borderLeftWidth: 1, borderRightWidth: 1,
+    borderColor: 'rgba(255,255,255,0.03)',
+  },
 });
 
 export default function App() {

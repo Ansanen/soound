@@ -9,6 +9,29 @@ const execFileAsync = promisify(execFile);
 const urlCache = new Map<string, { url: string; expires: number }>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 min
 
+// Player clients to try in order — some videos block certain clients
+const PLAYER_CLIENTS = ['web_creator', 'mediaconnect', 'web', 'android'];
+
+async function tryYtDlp(youtubeId: string, playerClient: string): Promise<string> {
+  const args = [
+    '--no-check-certificates',
+    '-f', 'bestaudio[ext=m4a]/bestaudio/best',
+    '--get-url',
+    '--no-warnings',
+    '--extractor-args', `youtube:player_client=${playerClient}`,
+    `https://www.youtube.com/watch?v=${youtubeId}`,
+  ];
+
+  const { stdout, stderr } = await execFileAsync('yt-dlp', args, { timeout: 30000 });
+  if (stderr) console.log(`[yt-dlp ${playerClient} stderr]:`, stderr.substring(0, 300));
+
+  const url = stdout.trim().split('\n')[0]; // Take first URL if multiple
+  if (!url || !url.startsWith('http')) {
+    throw new Error(`Invalid URL from ${playerClient}: ${url?.substring(0, 80)}`);
+  }
+  return url;
+}
+
 async function getAudioUrl(youtubeId: string): Promise<string> {
   // Check cache
   const cached = urlCache.get(youtubeId);
@@ -16,56 +39,45 @@ async function getAudioUrl(youtubeId: string): Promise<string> {
     return cached.url;
   }
 
-  // Use yt-dlp to get the direct audio URL
-  try {
-    const { stdout, stderr } = await execFileAsync('yt-dlp', [
-      '--no-check-certificates',
-      '-f', 'bestaudio[ext=m4a]/bestaudio',
-      '--get-url',
-      '--no-warnings',
-      `https://www.youtube.com/watch?v=${youtubeId}`,
-    ], { timeout: 30000 });
-
-    if (stderr) console.log('[yt-dlp stderr]:', stderr.substring(0, 500));
-
-    const url = stdout.trim();
-    if (!url || !url.startsWith('http')) {
-      throw new Error(`yt-dlp returned invalid URL: ${url.substring(0, 100)}`);
+  // Try different player clients until one works
+  let lastError: Error | null = null;
+  for (const client of PLAYER_CLIENTS) {
+    try {
+      console.log(`[yt-dlp] trying ${client} for ${youtubeId}`);
+      const url = await tryYtDlp(youtubeId, client);
+      console.log(`[yt-dlp] success with ${client}`);
+      urlCache.set(youtubeId, { url, expires: Date.now() + CACHE_TTL });
+      return url;
+    } catch (err: any) {
+      lastError = err;
+      console.log(`[yt-dlp] ${client} failed: ${err.message?.substring(0, 150)}`);
     }
-
-    // Cache the URL
-    urlCache.set(youtubeId, { url, expires: Date.now() + CACHE_TTL });
-    return url;
-  } catch (err: any) {
-    console.error('[yt-dlp error]:', err.message?.substring(0, 500));
-    if (err.stderr) console.error('[yt-dlp stderr]:', err.stderr?.substring(0, 500));
-    throw new Error(`yt-dlp failed: ${err.message?.substring(0, 200)}`);
   }
+
+  console.error('[yt-dlp] all clients failed for', youtubeId);
+  throw new Error(`yt-dlp failed with all clients: ${lastError?.message?.substring(0, 200)}`);
 }
 
 export async function searchRoutes(app: FastifyInstance) {
   // Debug endpoint to check yt-dlp
   app.get('/api/debug/ytdlp', async (req, reply) => {
+    const { id } = req.query as { id?: string };
+    const testId = id || 'dQw4w9WgXcQ';
     try {
       const { stdout: version } = await execFileAsync('yt-dlp', ['--version'], { timeout: 5000 });
-      let testResult = '';
-      try {
-        const { stdout, stderr } = await execFileAsync('yt-dlp', [
-          '--no-check-certificates',
-          '-f', 'bestaudio[ext=m4a]/bestaudio',
-          '--get-url',
-          '--no-warnings',
-          '--verbose',
-          'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        ], { timeout: 30000 });
-        testResult = `stdout: ${stdout.substring(0, 200)}\nstderr: ${stderr.substring(0, 500)}`;
-      } catch (e: any) {
-        testResult = `error: ${e.message?.substring(0, 200)}\nstderr: ${e.stderr?.substring(0, 500)}`;
+      const results: Record<string, string> = {};
+      for (const client of PLAYER_CLIENTS) {
+        try {
+          const url = await tryYtDlp(testId, client);
+          results[client] = `OK: ${url.substring(0, 80)}...`;
+        } catch (e: any) {
+          results[client] = `FAIL: ${e.message?.substring(0, 150)}`;
+        }
       }
       return {
         version: version.trim(),
-        deno: await execFileAsync('deno', ['--version'], { timeout: 5000 }).then(r => r.stdout.trim()).catch(() => 'not found'),
-        testResult,
+        testVideoId: testId,
+        clients: results,
       };
     } catch (e: any) {
       return reply.status(500).send({ error: e.message });

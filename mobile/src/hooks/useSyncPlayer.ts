@@ -50,29 +50,55 @@ export function useSyncPlayer({ queue, isHost, roomCode, onPlaybackStatus }: Use
 
     console.log('[player] loading track:', track.title);
 
-    // Always use stream proxy — direct YouTube URLs are blocked on mobile
-    const audioUri = api.getStreamUrl(track.youtubeId);
-    console.log('[player] stream URL:', audioUri);
+    // Try loading audio: first direct URL, then stream proxy
+    const statusCallback = (status: AVPlaybackStatus) => {
+      if (status.isLoaded) {
+        setPositionMs(status.positionMillis);
+        setDurationMs(status.durationMillis || track.duration * 1000);
+        setIsPlaying(status.isPlaying);
+        onPlaybackStatus?.(status);
+      }
+    };
 
+    // Attempt 1: Get direct audio URL via yt-dlp
+    let loaded = false;
     try {
+      const { url } = await api.getAudioUrl(track.youtubeId);
+      console.log('[player] got direct audio URL');
       const { sound } = await Audio.Sound.createAsync(
-        { uri: audioUri },
+        { uri: url },
         { shouldPlay: false },
-        (status) => {
-          if (status.isLoaded) {
-            setPositionMs(status.positionMillis);
-            setDurationMs(status.durationMillis || track.duration * 1000);
-            setIsPlaying(status.isPlaying);
-            onPlaybackStatus?.(status);
-          }
-        }
+        statusCallback,
       );
       soundRef.current = sound;
+      loaded = true;
+    } catch (e: any) {
+      console.log('[player] direct URL failed:', e.message?.substring(0, 100));
+    }
+
+    // Attempt 2: Use stream proxy (302 redirect)
+    if (!loaded) {
+      try {
+        const streamUrl = api.getStreamUrl(track.youtubeId);
+        console.log('[player] trying stream proxy');
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: streamUrl },
+          { shouldPlay: false },
+          statusCallback,
+        );
+        soundRef.current = sound;
+        loaded = true;
+      } catch (err: any) {
+        console.error('[player] stream proxy also failed:', err.message?.substring(0, 100));
+      }
+    }
+
+    if (loaded) {
       setCurrentTrackIndex(index);
       setDurationMs(track.duration * 1000);
       console.log('[player] loaded successfully');
-    } catch (err) {
-      console.error('[player] load error:', err);
+    } else {
+      console.error('[player] could not load track:', track.title);
     }
   }, [onPlaybackStatus]);
 

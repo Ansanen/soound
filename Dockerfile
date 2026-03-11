@@ -2,8 +2,8 @@ FROM node:22-slim
 
 # Install Python3 + pip for yt-dlp, and deno for yt-dlp JS runtime
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv curl unzip && \
-    pip3 install --break-system-packages yt-dlp && \
+    apt-get install -y python3 python3-pip python3-venv curl unzip ffmpeg && \
+    pip3 install --break-system-packages --upgrade yt-dlp && \
     curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 

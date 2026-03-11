@@ -1,11 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Dimensions } from 'react-native';
+import { Animated, StyleSheet } from 'react-native';
+import { colors } from '../theme';
 
 interface PartyOverlayProps {
   active: boolean;
 }
-
-const { width, height } = Dimensions.get('window');
 
 export default function PartyOverlay({ active }: PartyOverlayProps) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -13,55 +12,33 @@ export default function PartyOverlay({ active }: PartyOverlayProps) {
 
   useEffect(() => {
     if (active) {
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }).start();
-
+      Animated.timing(opacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
       const loop = Animated.loop(
         Animated.sequence([
-          Animated.timing(colorAnim, {
-            toValue: 1,
-            duration: 2000,
-            useNativeDriver: false,
-          }),
-          Animated.timing(colorAnim, {
-            toValue: 2,
-            duration: 2000,
-            useNativeDriver: false,
-          }),
-          Animated.timing(colorAnim, {
-            toValue: 0,
-            duration: 2000,
-            useNativeDriver: false,
-          }),
+          Animated.timing(colorAnim, { toValue: 1, duration: 2000, useNativeDriver: false }),
+          Animated.timing(colorAnim, { toValue: 2, duration: 2000, useNativeDriver: false }),
+          Animated.timing(colorAnim, { toValue: 0, duration: 2000, useNativeDriver: false }),
         ])
       );
       loop.start();
       return () => loop.stop();
     } else {
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(opacity, { toValue: 0, duration: 400, useNativeDriver: true }).start();
     }
   }, [active]);
 
   const bgColor = colorAnim.interpolate({
     inputRange: [0, 1, 2],
     outputRange: [
-      'rgba(59, 130, 246, 0.06)',
-      'rgba(168, 85, 247, 0.06)',
-      'rgba(236, 72, 153, 0.06)',
+      'rgba(124, 58, 237, 0.05)',
+      'rgba(168, 85, 247, 0.05)',
+      'rgba(236, 72, 153, 0.05)',
     ],
   });
-
   const borderColor = colorAnim.interpolate({
     inputRange: [0, 1, 2],
     outputRange: [
-      'rgba(59, 130, 246, 0.2)',
+      'rgba(124, 58, 237, 0.2)',
       'rgba(168, 85, 247, 0.2)',
       'rgba(236, 72, 153, 0.2)',
     ],
@@ -69,11 +46,7 @@ export default function PartyOverlay({ active }: PartyOverlayProps) {
 
   return (
     <Animated.View
-      style={[
-        styles.overlay,
-        { opacity, backgroundColor: bgColor, borderColor },
-      ]}
-      pointerEvents="none"
+      style={[styles.overlay, { opacity, backgroundColor: bgColor, borderColor, pointerEvents: 'none' as const }]}
     />
   );
 }
@@ -81,8 +54,6 @@ export default function PartyOverlay({ active }: PartyOverlayProps) {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    borderWidth: 2,
-    borderRadius: 0,
-    zIndex: 50,
+    borderWidth: 2, borderRadius: 0, zIndex: 50,
   },
 });

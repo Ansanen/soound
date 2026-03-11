@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Image, Animated,
 } from 'react-native';
-import { colors, spacing, radius, fonts } from '../theme';
+import { colors, spacing, radius, fonts, shadow } from '../theme';
 import { api } from '../services/api';
 
 interface SearchResult {
@@ -23,13 +23,35 @@ function formatDuration(sec: number): string {
   return `${min}:${s.toString().padStart(2, '0')}`;
 }
 
+// Animated add confirmation
+function AddedBadge() {
+  const scale = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(scale, { toValue: 1, friction: 5, tension: 100, useNativeDriver: true }).start();
+  }, []);
+  return (
+    <Animated.View style={[addStyles.badge, { transform: [{ scale }] }]}>
+      <Text style={addStyles.check}>{'✓'}</Text>
+    </Animated.View>
+  );
+}
+
+const addStyles = StyleSheet.create({
+  badge: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center',
+    ...shadow(colors.green, 0, 0, 0.4, 8),
+  },
+  check: { color: '#fff', fontSize: 16, ...fonts.bold },
+});
+
 export default function SearchMusic({ onAddTrack }: SearchMusicProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
-
   const [error, setError] = useState('');
+  const [focused, setFocused] = useState(false);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
@@ -53,50 +75,109 @@ export default function SearchMusic({ onAddTrack }: SearchMusicProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.inputRow}>
+      <View style={styles.headerRow}>
+        <Text style={styles.sectionTitle}>FIND MUSIC</Text>
+        {results.length > 0 && (
+          <Text style={styles.resultCount}>{results.length} results</Text>
+        )}
+      </View>
+
+      {/* Search bar */}
+      <View style={[styles.searchBar, focused && styles.searchBarFocused]}>
+        <View style={styles.searchIconWrap}>
+          <View style={styles.searchLens} />
+          <View style={styles.searchHandle} />
+        </View>
         <TextInput
           style={styles.input}
-          placeholder="Search music..."
+          placeholder="Search songs, artists..."
           placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
           onSubmitEditing={handleSearch}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           returnKeyType="search"
         />
-        {loading && <ActivityIndicator color={colors.accent} style={styles.loader} />}
-        <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
-          <Text style={styles.searchBtnText}>Search</Text>
-        </TouchableOpacity>
+        {loading ? (
+          <ActivityIndicator color={colors.accent} style={{ marginRight: 4 }} />
+        ) : query.trim() ? (
+          <TouchableOpacity style={styles.goBtn} onPress={handleSearch} activeOpacity={0.7}>
+            <Text style={styles.goBtnText}>{'>'}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
+      {error ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorDot}>{'!'}</Text>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+
+      {/* Results list */}
       <View style={styles.list}>
-        {results.length > 0 ? results.map((item) => {
+        {results.length > 0 ? results.map((item, index) => {
           const added = addedIds.has(item.youtubeId);
           return (
-            <View key={item.youtubeId} style={styles.item}>
+            <TouchableOpacity
+              key={item.youtubeId}
+              style={[styles.item, added && styles.itemAdded]}
+              onPress={() => !added && handleAdd(item)}
+              activeOpacity={added ? 1 : 0.7}
+            >
+              {/* Thumbnail */}
+              <View style={styles.thumbWrap}>
+                {item.thumbnail ? (
+                  <Image source={{ uri: item.thumbnail }} style={styles.thumb} />
+                ) : (
+                  <View style={[styles.thumb, styles.thumbEmpty]}>
+                    <View style={styles.thumbNote} />
+                  </View>
+                )}
+                <View style={styles.durBadge}>
+                  <Text style={styles.durText}>{formatDuration(item.duration)}</Text>
+                </View>
+                {/* Overlay number */}
+                <View style={styles.indexBadge}>
+                  <Text style={styles.indexText}>{index + 1}</Text>
+                </View>
+              </View>
+
+              {/* Info */}
               <View style={styles.itemInfo}>
-                <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                <Text style={[styles.itemTitle, added && { color: colors.textSub }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
                 <Text style={styles.itemArtist} numberOfLines={1}>{item.artist}</Text>
               </View>
-              <View style={styles.itemRight}>
-                <Text style={styles.itemDur}>{formatDuration(item.duration)}</Text>
+
+              {/* Add / Added */}
+              {added ? (
+                <AddedBadge />
+              ) : (
                 <TouchableOpacity
-                  style={[styles.addBtn, added && styles.addBtnDone]}
+                  style={styles.addBtn}
                   onPress={() => handleAdd(item)}
-                  disabled={added}
+                  activeOpacity={0.7}
                 >
-                  <Text style={[styles.addBtnText, added && styles.addBtnTextDone]}>
-                    {added ? '✓' : '+'}
-                  </Text>
+                  <Text style={styles.addBtnPlus}>+</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
+              )}
+            </TouchableOpacity>
           );
-        }) : (
-          query.trim() && !loading ? (
-            <Text style={styles.empty}>Search for songs to add to the queue</Text>
-          ) : null
+        }) : null}
+
+        {/* Empty state */}
+        {results.length === 0 && !loading && (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconWrap}>
+              <View style={styles.emptyNote1} />
+              <View style={styles.emptyNote2} />
+            </View>
+            <Text style={styles.emptyTitle}>Find your music</Text>
+            <Text style={styles.emptySub}>Search for any song to add to the queue</Text>
+          </View>
         )}
       </View>
     </View>
@@ -104,104 +185,156 @@ export default function SearchMusic({ onAddTrack }: SearchMusicProps) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginTop: spacing.lg,
+  container: { marginTop: spacing.lg },
+  headerRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 12,
   },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sectionTitle: {
+    fontSize: 11, ...fonts.bold, color: colors.textDim,
+    letterSpacing: 2,
+  },
+  resultCount: {
+    fontSize: 11, color: colors.accent, ...fonts.semibold,
+  },
+
+  // Search bar
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.surface, borderRadius: 18,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 2,
     marginBottom: spacing.md,
   },
+  searchBarFocused: {
+    borderColor: colors.borderGlow,
+    backgroundColor: 'rgba(124,58,237,0.03)',
+    ...shadow(colors.accent, 0, 0, 0.15, 10),
+  },
+  searchIconWrap: {
+    width: 16, height: 16, marginRight: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  searchLens: {
+    width: 10, height: 10, borderRadius: 5,
+    borderWidth: 1.5, borderColor: colors.textMuted,
+  },
+  searchHandle: {
+    width: 5, height: 1.5, backgroundColor: colors.textMuted,
+    position: 'absolute', bottom: 0, right: 0,
+    transform: [{ rotate: '45deg' }],
+  },
   input: {
-    flex: 1,
-    padding: 14,
-    paddingHorizontal: 20,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    fontSize: 14,
+    flex: 1, paddingVertical: 14,
+    color: colors.text, fontSize: 14,
   },
-  loader: {
-    marginLeft: 12,
+  goBtn: {
+    width: 34, height: 34, borderRadius: 12,
+    backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center',
   },
-  list: {
-    maxHeight: 300,
+  goBtnText: {
+    color: '#fff', fontSize: 16, ...fonts.bold,
   },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+
+  // Error
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, borderRadius: 14,
+    backgroundColor: 'rgba(239,68,68,0.06)',
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.12)',
+    marginBottom: spacing.sm,
   },
-  itemInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  itemTitle: {
-    fontSize: 14,
-    ...fonts.medium,
-    color: colors.text,
-  },
-  itemArtist: {
-    fontSize: 12,
-    color: colors.textDim,
-    marginTop: 2,
-  },
-  itemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  itemDur: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnDone: {
-    borderColor: colors.green,
-  },
-  addBtnText: {
-    color: colors.accent,
-    fontSize: 18,
-    ...fonts.bold,
-  },
-  addBtnTextDone: {
-    color: colors.green,
-  },
-  searchBtn: {
-    marginLeft: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.accent,
-  },
-  searchBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    ...fonts.semibold,
+  errorDot: {
+    color: colors.red, fontSize: 14, ...fonts.bold,
   },
   errorText: {
-    color: '#ff6b6b',
-    fontSize: 12,
-    marginBottom: 8,
+    color: colors.red, fontSize: 12, ...fonts.medium, flex: 1,
   },
-  empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    padding: spacing.xl,
-    fontSize: 13,
+
+  // Results
+  list: {},
+  item: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 10, marginBottom: 8,
+    borderRadius: 16, backgroundColor: colors.card,
+    borderWidth: 1, borderColor: colors.border,
+    gap: 12,
+  },
+  itemAdded: {
+    borderColor: 'rgba(16,185,129,0.15)',
+    backgroundColor: 'rgba(16,185,129,0.03)',
+  },
+
+  // Thumbnail
+  thumbWrap: { position: 'relative' },
+  thumb: {
+    width: 58, height: 58, borderRadius: 12,
+    backgroundColor: colors.surface,
+  },
+  thumbEmpty: {
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.border,
+  },
+  thumbNote: {
+    width: 16, height: 20, borderRadius: 4,
+    backgroundColor: colors.textMuted, opacity: 0.3,
+  },
+  durBadge: {
+    position: 'absolute', bottom: 3, right: 3,
+    backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 5, paddingVertical: 2,
+    borderRadius: 5,
+  },
+  durText: { color: '#fff', fontSize: 9, ...fonts.bold },
+  indexBadge: {
+    position: 'absolute', top: 3, left: 3,
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center',
+  },
+  indexText: { color: '#fff', fontSize: 8, ...fonts.bold },
+
+  // Info
+  itemInfo: { flex: 1 },
+  itemTitle: {
+    fontSize: 13, ...fonts.semibold, color: colors.text, lineHeight: 17,
+  },
+  itemArtist: {
+    fontSize: 11, color: colors.textDim, marginTop: 3,
+  },
+
+  // Add button
+  addBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    borderWidth: 1.5, borderColor: colors.accent,
+    backgroundColor: colors.accentMuted,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  addBtnPlus: {
+    color: colors.accentLight, fontSize: 20, ...fonts.bold, marginTop: -1,
+  },
+
+  // Empty
+  emptyState: {
+    alignItems: 'center', padding: spacing.xl, gap: 6,
+  },
+  emptyIconWrap: {
+    width: 48, height: 48, marginBottom: 8,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  emptyNote1: {
+    width: 20, height: 24, borderRadius: 6,
+    backgroundColor: colors.accent, opacity: 0.2,
+    transform: [{ rotate: '-8deg' }],
+  },
+  emptyNote2: {
+    width: 20, height: 24, borderRadius: 6,
+    backgroundColor: colors.purple, opacity: 0.15,
+    position: 'absolute', right: 6,
+    transform: [{ rotate: '8deg' }],
+  },
+  emptyTitle: {
+    fontSize: 15, ...fonts.semibold, color: colors.textSub,
+  },
+  emptySub: {
+    fontSize: 12, color: colors.textMuted, ...fonts.medium,
   },
 });

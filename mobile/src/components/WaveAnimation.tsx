@@ -48,6 +48,8 @@ export default function WaveAnimation({
     }
   }, [isPlaying]);
 
+  const barColors = [colors.accent, colors.purple, colors.accent, colors.pink, colors.accent, colors.purple, colors.accent];
+
   return (
     <View style={styles.container}>
       {animations.map((anim, i) => (
@@ -56,7 +58,7 @@ export default function WaveAnimation({
           style={[
             styles.bar,
             {
-              backgroundColor: barColor,
+              backgroundColor: barColors[i % barColors.length],
               transform: [{ scaleY: anim }],
               height: 80,
             },
