@@ -17,22 +17,30 @@ async function getAudioUrl(youtubeId: string): Promise<string> {
   }
 
   // Use yt-dlp to get the direct audio URL
-  const { stdout } = await execFileAsync('yt-dlp', [
-    '--no-check-certificates',
-    '-f', 'bestaudio[ext=m4a]/bestaudio',
-    '--get-url',
-    `https://www.youtube.com/watch?v=${youtubeId}`,
-  ], { timeout: 15000 });
+  try {
+    const { stdout, stderr } = await execFileAsync('yt-dlp', [
+      '--no-check-certificates',
+      '-f', 'bestaudio[ext=m4a]/bestaudio',
+      '--get-url',
+      '--no-warnings',
+      `https://www.youtube.com/watch?v=${youtubeId}`,
+    ], { timeout: 30000 });
 
-  const url = stdout.trim();
-  if (!url || !url.startsWith('http')) {
-    throw new Error('Failed to extract audio URL');
+    if (stderr) console.log('[yt-dlp stderr]:', stderr.substring(0, 500));
+
+    const url = stdout.trim();
+    if (!url || !url.startsWith('http')) {
+      throw new Error(`yt-dlp returned invalid URL: ${url.substring(0, 100)}`);
+    }
+
+    // Cache the URL
+    urlCache.set(youtubeId, { url, expires: Date.now() + CACHE_TTL });
+    return url;
+  } catch (err: any) {
+    console.error('[yt-dlp error]:', err.message?.substring(0, 500));
+    if (err.stderr) console.error('[yt-dlp stderr]:', err.stderr?.substring(0, 500));
+    throw new Error(`yt-dlp failed: ${err.message?.substring(0, 200)}`);
   }
-
-  // Cache the URL
-  urlCache.set(youtubeId, { url, expires: Date.now() + CACHE_TTL });
-
-  return url;
 }
 
 export async function searchRoutes(app: FastifyInstance) {
@@ -63,9 +71,9 @@ export async function searchRoutes(app: FastifyInstance) {
     try {
       const url = await getAudioUrl(youtubeId);
       return { url };
-    } catch (err) {
+    } catch (err: any) {
       console.error('Audio URL error:', err);
-      return reply.status(500).send({ error: 'Failed to get audio URL' });
+      return reply.status(500).send({ error: err.message || 'Failed to get audio URL' });
     }
   });
 

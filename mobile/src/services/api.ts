@@ -1,4 +1,5 @@
-const API_URL = __DEV__ ? 'http://localhost:3000' : 'https://api.soound.xyz';
+const RAILWAY_URL = 'https://soound-dbpath-appdatasoounddb.up.railway.app';
+const API_URL = __DEV__ ? RAILWAY_URL : RAILWAY_URL;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
